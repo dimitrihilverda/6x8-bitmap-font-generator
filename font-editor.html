@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>6×8 Bitmap Font Editor</title>
+<style>
+:root {
+  --bg: #0d0d1a;
+  --panel: #13132a;
+  --border: #252550;
+  --accent: #4a9eff;
+  --green: #3dff90;
+  --text: #c0c8e0;
+  --dim: #5060a0;
+  --px-on: #3dff90;
+  --px-off: #151830;
+  --px-on-dim: #1e6040;
+  --px-off-dim: #0e1020;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+/* ── Header ── */
+header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+header h1 { font-size: 15px; color: var(--accent); letter-spacing: .5px; }
+.spacer { flex: 1; }
+
+/* ── Main layout ── */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Left: char grid ── */
+.left {
+  width: 240px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.left-hdr {
+  padding: 6px 10px;
+  font-size: 10px;
+  color: var(--dim);
+  border-bottom: 1px solid var(--border);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+#charGrid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+.cc {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2px 1px 1px;
+  transition: border-color .1s;
+  position: relative;
+}
+.cc:hover { border-color: #4060c0; }
+.cc.sel { border-color: var(--accent); border-width: 2px; }
+.cc canvas {
+  display: block;
+  width: 18px;
+  height: 24px;
+  image-rendering: pixelated;
+}
+.cc-lbl {
+  font-size: 7px;
+  color: var(--dim);
+  line-height: 1;
+  margin-top: 1px;
+  font-family: monospace;
+}
+
+/* ── Center: editor ── */
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  gap: 14px;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+/* Char nav */
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.char-big {
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--accent);
+  min-width: 44px;
+  text-align: center;
+  line-height: 1;
+}
+.char-sub {
+  font-size: 10px;
+  color: var(--dim);
+  text-align: center;
+  margin-top: 2px;
+  font-family: monospace;
+}
+
+/* Pixel grid */
+#pixelGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 40px);
+  grid-template-rows: repeat(8, 40px);
+  gap: 3px;
+  user-select: none;
+  cursor: crosshair;
+}
+.px {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  border: 1px solid #1c2040;
+  background: var(--px-off);
+  transition: background .04s;
+}
+.px.on { background: var(--px-on); }
+.px.row7 { background: var(--px-off-dim); border-color: #141828; }
+.px.row7.on { background: var(--px-on-dim); }
+
+/* Zoom previews */
+.zooms {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+.zoom-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.zoom-wrap span { font-size: 10px; color: var(--dim); }
+.zoom-wrap canvas {
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+/* Preview text section */
+.preview-sec {
+  width: 100%;
+  max-width: 760px;
+}
+.preview-sec label {
+  font-size: 10px;
+  color: var(--dim);
+  display: block;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.prev-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.prev-controls label { margin: 0; }
+.prev-scroll { overflow-x: auto; }
+#previewCanvas {
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  display: block;
+  border-radius: 2px;
+}
+
+/* ── Right: tools ── */
+.right {
+  width: 270px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.sec {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+}
+.sec h3 {
+  font-size: 9px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 8px;
+}
+
+/* Inputs */
+input[type=text], input[type=number], select, textarea {
+  background: #0f0f28;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+  width: 100%;
+  outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; }
+select { cursor: pointer; }
+label.field { font-size: 10px; color: var(--dim); display: block; margin-bottom: 3px; }
+
+/* Buttons */
+.btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.btn:hover { opacity: .85; }
+.btn.ghost {
+  background: var(--border);
+  color: var(--text);
+  font-weight: 600;
+}
+.btn.sm { padding: 3px 8px; font-size: 11px; }
+.btn.full { width: 100%; }
+.btn-row { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+
+/* Hex display */
+.hex-out {
+  font-family: monospace;
+  font-size: 11px;
+  color: #88aaff;
+  line-height: 1.9;
+  letter-spacing: .3px;
+}
+
+/* Slider */
+.slider-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.slider-row input[type=range] {
+  flex: 1;
+  width: auto;
+  padding: 0;
+  height: 4px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.slider-val { font-size: 11px; color: var(--text); min-width: 32px; font-family: monospace; }
+
+/* Status */
+.status { font-size: 11px; margin-top: 6px; line-height: 1.5; }
+.status.ok { color: var(--green); }
+.status.err { color: #ff4a6e; }
+.status.info { color: var(--dim); }
+
+/* Modal */
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.75);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+}
+.modal.open { display: flex; }
+.modal-box {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 20px;
+  width: 600px;
+  max-width: 96vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.modal-box h3 { color: var(--accent); font-size: 14px; }
+.modal-box p { font-size: 11px; color: var(--dim); line-height: 1.5; }
+.modal-foot { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Color pickers */
+input[type=color] {
+  width: 32px;
+  height: 22px;
+  padding: 1px 2px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+/* Info text */
+.info-text {
+  font-size: 10px;
+  color: var(--dim);
+  line-height: 1.7;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>6×8 Bitmap Font Editor</h1>
+  <div class="spacer"></div>
+  <button class="btn ghost sm" onclick="showModal('importModal')">Import C</button>
+  <button class="btn sm" onclick="showExport()">Export C</button>
+</header>
+
+<div class="main">
+
+  <!-- LEFT: character grid -->
+  <div class="left">
+    <div class="left-hdr">ASCII 32–126 &nbsp;·&nbsp; 95 characters</div>
+    <div id="charGrid"></div>
+  </div>
+
+  <!-- CENTER: pixel editor -->
+  <div class="center">
+    <div class="nav-row">
+      <button class="btn ghost sm" onclick="navigate(-1)">◀ Prev</button>
+      <div>
+        <div class="char-big" id="charBig">!</div>
+        <div class="char-sub" id="charSub">ASCII 33 · 0x21</div>
+      </div>
+      <button class="btn ghost sm" onclick="navigate(1)">Next ▶</button>
+    </div>
+
+    <div id="pixelGrid"></div>
+
+    <div class="zooms">
+      <div class="zoom-wrap">
+        <canvas id="pv1" width="6" height="8" style="width:12px;height:16px"></canvas>
+        <span>1×</span>
+      </div>
+      <div class="zoom-wrap">
+        <canvas id="pv3" width="18" height="24" style="width:36px;height:48px"></canvas>
+        <span>3×</span>
+      </div>
+      <div class="zoom-wrap">
+        <canvas id="pv6" width="36" height="48" style="width:72px;height:96px"></canvas>
+        <span>6×</span>
+      </div>
+      <div class="zoom-wrap">
+        <canvas id="pv10" width="60" height="80" style="width:120px;height:160px"></canvas>
+        <span>10×</span>
+      </div>
+    </div>
+
+    <div class="preview-sec">
+      <label>Text preview</label>
+      <input type="text" id="previewText" value="Hello World! 0123 ABCDEFabcdef @#$%"
+             oninput="renderPreview()" style="margin-bottom:8px">
+      <div class="prev-controls">
+        <label>Scale:</label>
+        <select id="pvScale" onchange="renderPreview()" style="width:60px">
+          <option value="2">2×</option>
+          <option value="3" selected>3×</option>
+          <option value="4">4×</option>
+          <option value="6">6×</option>
+          <option value="8">8×</option>
+        </select>
+        <label>Pixel:</label>
+        <input type="color" id="pvOn" value="#3dff90" oninput="renderPreview()">
+        <label>BG:</label>
+        <input type="color" id="pvBg" value="#000000" oninput="renderPreview()">
+      </div>
+      <div class="prev-scroll">
+        <canvas id="previewCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: tools -->
+  <div class="right">
+
+    <!-- Char data & edit tools -->
+    <div class="sec">
+      <h3>Char Data</h3>
+      <div class="hex-out" id="hexOut"></div>
+      <div class="btn-row">
+        <button class="btn ghost sm" onclick="clearChar()" title="Clear all pixels">Clear</button>
+        <button class="btn ghost sm" onclick="fillChar()" title="Fill all pixels">Fill</button>
+        <button class="btn ghost sm" onclick="invertChar()" title="Invert pixels">Invert</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost sm" onclick="shiftChar(-1,0)" title="Shift left">← </button>
+        <button class="btn ghost sm" onclick="shiftChar(1,0)"  title="Shift right"> →</button>
+        <button class="btn ghost sm" onclick="shiftChar(0,-1)" title="Shift up">↑ </button>
+        <button class="btn ghost sm" onclick="shiftChar(0,1)"  title="Shift down"> ↓</button>
+        <button class="btn ghost sm" onclick="mirrorH()" title="Mirror horizontal">↔</button>
+        <button class="btn ghost sm" onclick="mirrorV()" title="Mirror vertical">↕</button>
+      </div>
+    </div>
+
+    <!-- Google Fonts -->
+    <div class="sec">
+      <h3>Google Fonts → 6×8</h3>
+      <label class="field">Popular fonts:</label>
+      <select id="gfPop" onchange="gfPickPop()" style="margin-bottom:6px">
+        <option value="">— pick one —</option>
+        <option>Press Start 2P</option>
+        <option>VT323</option>
+        <option>Share Tech Mono</option>
+        <option>Roboto Mono</option>
+        <option>Space Mono</option>
+        <option>Courier Prime</option>
+        <option>Ubuntu Mono</option>
+        <option>Fira Code</option>
+        <option>JetBrains Mono</option>
+        <option>Inconsolata</option>
+        <option>Source Code Pro</option>
+        <option>IBM Plex Mono</option>
+        <option>PT Mono</option>
+        <option>Oswald</option>
+        <option>Bebas Neue</option>
+        <option>Anton</option>
+        <option>Righteous</option>
+        <option>Orbitron</option>
+      </select>
+      <label class="field">Or type any Google Font name:</label>
+      <input type="text" id="gfName" placeholder="e.g. Press Start 2P" style="margin-bottom:6px">
+      <label class="field">Threshold (lower = more pixels):</label>
+      <div class="slider-row">
+        <input type="range" id="gfThresh" min="5" max="90" value="35"
+               oninput="document.getElementById('gfThreshVal').textContent=this.value+'%'">
+        <span class="slider-val" id="gfThreshVal">35%</span>
+      </div>
+      <label class="field">Convert scope:</label>
+      <select id="gfScope" style="margin-bottom:8px">
+        <option value="all">All 95 characters</option>
+        <option value="cur">Current character only</option>
+      </select>
+      <button class="btn full" onclick="loadGoogleFont()">Load &amp; Convert</button>
+      <div class="status info" id="gfStatus"></div>
+    </div>
+
+    <!-- Reset -->
+    <div class="sec">
+      <h3>Reset</h3>
+      <button class="btn ghost full" onclick="resetFont()">Reset to built-in font</button>
+    </div>
+
+    <!-- Encoding info -->
+    <div class="sec">
+      <h3>Encoding</h3>
+      <div class="info-text">
+        6 bytes = 6 columns (col 5 = spacing).<br>
+        Byte = column bitmask.<br>
+        Bit 0 (LSB) = row 0 (top).<br>
+        Bit 6 = row 6 (bottom).<br>
+        Bit 7 always 0 (dimmed row).<br>
+        Row 7 = unused (shown dimmed).
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="modal" id="importModal">
+  <div class="modal-box">
+    <h3>Import C Font Data</h3>
+    <p>Paste the C array (full or partial). Hex values like <code>0x3E</code> are extracted automatically.</p>
+    <textarea id="importText" rows="14" placeholder="Paste C code here, e.g.:
+static const uint8_t font6x8[95][6] PROGMEM = {
+  {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // 32 space
+  ...
+};"></textarea>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('importModal')">Cancel</button>
+      <button class="btn" onclick="doImport()">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export modal -->
+<div class="modal" id="exportModal">
+  <div class="modal-box">
+    <h3>Export C Font Data</h3>
+    <textarea id="exportText" rows="18" readonly></textarea>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('exportModal')">Close</button>
+      <button class="btn" id="copyBtn" onclick="copyExport()">Copy to Clipboard</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// FONT DATA — ASCII 32–126, 95 characters
+// ═══════════════════════════════════════════════
+const FONT_DEFAULT = [
+  [0x00,0x00,0x00,0x00,0x00,0x00], // 32 space
+  [0x00,0x00,0x4F,0x00,0x00,0x00], // 33 !
+  [0x00,0x07,0x00,0x07,0x00,0x00], // 34 "
+  [0x14,0x7F,0x14,0x7F,0x14,0x00], // 35 #
+  [0x24,0x2A,0x7F,0x2A,0x12,0x00], // 36 $
+  [0x62,0x64,0x08,0x13,0x23,0x00], // 37 %
+  [0x36,0x49,0x49,0x36,0x50,0x00], // 38 &
+  [0x00,0x04,0x03,0x00,0x00,0x00], // 39 '
+  [0x00,0x1C,0x22,0x41,0x00,0x00], // 40 (
+  [0x00,0x41,0x22,0x1C,0x00,0x00], // 41 )
+  [0x14,0x08,0x3E,0x08,0x14,0x00], // 42 *
+  [0x08,0x08,0x3E,0x08,0x08,0x00], // 43 +
+  [0x00,0x50,0x30,0x00,0x00,0x00], // 44 ,
+  [0x08,0x08,0x08,0x08,0x08,0x00], // 45 -
+  [0x00,0x60,0x60,0x00,0x00,0x00], // 46 .
+  [0x20,0x10,0x08,0x04,0x02,0x00], // 47 /
+  [0x3E,0x51,0x49,0x45,0x3E,0x00], // 48 0
+  [0x00,0x42,0x7F,0x40,0x00,0x00], // 49 1
+  [0x42,0x61,0x51,0x49,0x46,0x00], // 50 2
+  [0x21,0x41,0x45,0x4B,0x31,0x00], // 51 3
+  [0x18,0x14,0x12,0x7F,0x10,0x00], // 52 4
+  [0x27,0x45,0x45,0x45,0x39,0x00], // 53 5
+  [0x3C,0x4A,0x49,0x49,0x30,0x00], // 54 6
+  [0x01,0x71,0x09,0x05,0x03,0x00], // 55 7
+  [0x36,0x49,0x49,0x49,0x36,0x00], // 56 8
+  [0x06,0x49,0x49,0x29,0x1E,0x00], // 57 9
+  [0x00,0x36,0x36,0x00,0x00,0x00], // 58 :
+  [0x00,0x56,0x36,0x00,0x00,0x00], // 59 ;
+  [0x08,0x14,0x22,0x41,0x00,0x00], // 60 <
+  [0x14,0x14,0x14,0x14,0x14,0x00], // 61 =
+  [0x00,0x41,0x22,0x14,0x08,0x00], // 62 >
+  [0x02,0x01,0x51,0x09,0x06,0x00], // 63 ?
+  [0x32,0x49,0x59,0x51,0x3E,0x00], // 64 @
+  [0x7E,0x11,0x11,0x11,0x7E,0x00], // 65 A
+  [0x7F,0x49,0x49,0x49,0x36,0x00], // 66 B
+  [0x3E,0x41,0x41,0x41,0x22,0x00], // 67 C
+  [0x7F,0x41,0x41,0x41,0x3E,0x00], // 68 D
+  [0x7F,0x49,0x49,0x49,0x41,0x00], // 69 E
+  [0x7F,0x09,0x09,0x09,0x01,0x00], // 70 F
+  [0x3E,0x41,0x49,0x49,0x3A,0x00], // 71 G
+  [0x7F,0x08,0x08,0x08,0x7F,0x00], // 72 H
+  [0x00,0x41,0x7F,0x41,0x00,0x00], // 73 I
+  [0x20,0x40,0x41,0x3F,0x01,0x00], // 74 J
+  [0x7F,0x08,0x14,0x22,0x41,0x00], // 75 K
+  [0x7F,0x40,0x40,0x40,0x40,0x00], // 76 L
+  [0x7F,0x02,0x04,0x02,0x7F,0x00], // 77 M
+  [0x7F,0x04,0x08,0x10,0x7F,0x00], // 78 N
+  [0x3E,0x41,0x41,0x41,0x3E,0x00], // 79 O
+  [0x7F,0x09,0x09,0x09,0x06,0x00], // 80 P
+  [0x3E,0x41,0x51,0x21,0x5E,0x00], // 81 Q
+  [0x7F,0x09,0x19,0x29,0x46,0x00], // 82 R
+  [0x46,0x49,0x49,0x49,0x31,0x00], // 83 S
+  [0x01,0x01,0x7F,0x01,0x01,0x00], // 84 T
+  [0x3F,0x40,0x40,0x40,0x3F,0x00], // 85 U
+  [0x1F,0x20,0x40,0x20,0x1F,0x00], // 86 V
+  [0x3F,0x40,0x30,0x40,0x3F,0x00], // 87 W
+  [0x63,0x14,0x08,0x14,0x63,0x00], // 88 X
+  [0x07,0x08,0x70,0x08,0x07,0x00], // 89 Y
+  [0x61,0x51,0x49,0x45,0x43,0x00], // 90 Z
+  [0x00,0x7F,0x41,0x00,0x00,0x00], // 91 [
+  [0x02,0x04,0x08,0x10,0x20,0x00], // 92 backslash
+  [0x00,0x41,0x7F,0x00,0x00,0x00], // 93 ]
+  [0x04,0x02,0x01,0x02,0x04,0x00], // 94 ^
+  [0x40,0x40,0x40,0x40,0x40,0x00], // 95 _
+  [0x00,0x01,0x02,0x04,0x00,0x00], // 96 `
+  [0x20,0x54,0x54,0x54,0x78,0x00], // 97 a
+  [0x7F,0x48,0x44,0x44,0x38,0x00], // 98 b
+  [0x38,0x44,0x44,0x44,0x20,0x00], // 99 c
+  [0x38,0x44,0x44,0x48,0x7F,0x00], // 100 d
+  [0x38,0x54,0x54,0x54,0x18,0x00], // 101 e
+  [0x08,0x7E,0x09,0x01,0x02,0x00], // 102 f
+  [0x18,0xA4,0xA4,0x9C,0x78,0x00], // 103 g
+  [0x7F,0x08,0x04,0x04,0x78,0x00], // 104 h
+  [0x00,0x44,0x7D,0x40,0x00,0x00], // 105 i
+  [0x20,0x40,0x44,0x3D,0x00,0x00], // 106 j
+  [0x7F,0x10,0x28,0x44,0x00,0x00], // 107 k
+  [0x00,0x41,0x7F,0x40,0x00,0x00], // 108 l
+  [0x7C,0x04,0x78,0x04,0x78,0x00], // 109 m
+  [0x7C,0x08,0x04,0x04,0x78,0x00], // 110 n
+  [0x38,0x44,0x44,0x44,0x38,0x00], // 111 o
+  [0x7C,0x14,0x14,0x14,0x08,0x00], // 112 p
+  [0x08,0x14,0x14,0x18,0x7C,0x00], // 113 q
+  [0x7C,0x08,0x04,0x04,0x08,0x00], // 114 r
+  [0x48,0x54,0x54,0x54,0x20,0x00], // 115 s
+  [0x04,0x3F,0x44,0x40,0x20,0x00], // 116 t
+  [0x3C,0x40,0x40,0x20,0x7C,0x00], // 117 u
+  [0x1C,0x20,0x40,0x20,0x1C,0x00], // 118 v
+  [0x3C,0x40,0x30,0x40,0x3C,0x00], // 119 w
+  [0x44,0x28,0x10,0x28,0x44,0x00], // 120 x
+  [0x1C,0xA0,0xA0,0x9C,0x0C,0x00], // 121 y
+  [0x44,0x64,0x54,0x4C,0x44,0x00], // 122 z
+  [0x00,0x08,0x36,0x41,0x00,0x00], // 123 {
+  [0x00,0x00,0x7F,0x00,0x00,0x00], // 124 |
+  [0x00,0x41,0x36,0x08,0x00,0x00], // 125 }
+  [0x08,0x04,0x08,0x10,0x08,0x00], // 126 ~
+];
+
+// Working copy
+let fontData = FONT_DEFAULT.map(r => [...r]);
+let currentChar = 1; // index → ASCII 33 '!'
+
+// ═══════════════════════════════════════════════
+// PIXEL GRID EDITOR
+// ═══════════════════════════════════════════════
+let painting = false;
+let paintOn  = true;
+
+function buildPixelGrid() {
+  const grid = document.getElementById('pixelGrid');
+  grid.innerHTML = '';
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 6; col++) {
+      const px = document.createElement('div');
+      px.className = 'px off' + (row === 7 ? ' row7' : '');
+      px.dataset.col = col;
+      px.dataset.row = row;
+      px.addEventListener('mousedown', e => {
+        painting = true;
+        paintOn = !px.classList.contains('on');
+        applyPixel(col, row, paintOn);
+        e.preventDefault();
+      });
+      px.addEventListener('mouseenter', () => {
+        if (painting) applyPixel(col, row, paintOn);
+      });
+      grid.appendChild(px);
+    }
+  }
+  document.addEventListener('mouseup', () => { painting = false; });
+}
+
+function applyPixel(col, row, on) {
+  if (on) fontData[currentChar][col] |=  (1 << row);
+  else    fontData[currentChar][col] &= ~(1 << row);
+  refreshEditor();
+}
+
+function refreshEditor() {
+  const data = fontData[currentChar];
+  document.querySelectorAll('#pixelGrid .px').forEach(px => {
+    const col = +px.dataset.col;
+    const row = +px.dataset.row;
+    const on  = !!(data[col] & (1 << row));
+    px.classList.toggle('on', on);
+  });
+  renderZooms();
+  updateHex();
+  updateCharGridCell(currentChar);
+}
+
+// ═══════════════════════════════════════════════
+// CHARACTER GRID (left panel)
+// ═══════════════════════════════════════════════
+function buildCharGrid() {
+  const grid = document.getElementById('charGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 95; i++) {
+    const ascii = i + 32;
+    const cell  = document.createElement('div');
+    cell.className = 'cc';
+    cell.id = 'cc' + i;
+
+    const printable = ascii >= 33 && ascii <= 126;
+    cell.title = `ASCII ${ascii} ${printable ? '('+String.fromCharCode(ascii)+')' : '(space)'}`;
+
+    const c = document.createElement('canvas');
+    c.width = 6; c.height = 8;
+    cell.appendChild(c);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'cc-lbl';
+    lbl.textContent = printable ? String.fromCharCode(ascii) : '·';
+    cell.appendChild(lbl);
+
+    cell.addEventListener('click', () => selectChar(i));
+    grid.appendChild(cell);
+    drawOnCanvas(i, c);
+  }
+}
+
+function drawOnCanvas(idx, canvas, onClr, bgClr) {
+  const ctx = canvas.getContext('2d');
+  const on  = onClr || '#3dff90';
+  const bg  = bgClr || '#151830';
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 6, 8);
+  const d = fontData[idx];
+  ctx.fillStyle = on;
+  for (let col = 0; col < 6; col++)
+    for (let row = 0; row < 8; row++)
+      if (d[col] & (1 << row))
+        ctx.fillRect(col, row, 1, 1);
+}
+
+function updateCharGridCell(idx) {
+  const cell = document.getElementById('cc' + idx);
+  if (cell) drawOnCanvas(idx, cell.querySelector('canvas'));
+}
+
+// ═══════════════════════════════════════════════
+// SELECTION & NAVIGATION
+// ═══════════════════════════════════════════════
+function selectChar(idx) {
+  document.getElementById('cc' + currentChar)?.classList.remove('sel');
+  currentChar = Math.max(0, Math.min(94, idx));
+  const cell = document.getElementById('cc' + currentChar);
+  cell?.classList.add('sel');
+  cell?.scrollIntoView({ block: 'nearest' });
+
+  const ascii = currentChar + 32;
+  const printable = ascii >= 33 && ascii <= 126;
+  document.getElementById('charBig').textContent = printable ? String.fromCharCode(ascii) : '·';
+  document.getElementById('charSub').textContent =
+    `ASCII ${ascii} · 0x${ascii.toString(16).toUpperCase().padStart(2,'0')}`;
+
+  refreshEditor();
+}
+
+function navigate(delta) { selectChar(currentChar + delta); }
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  // Don't capture when typing in inputs
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (e.key === 'ArrowLeft')  { navigate(-1); e.preventDefault(); }
+  if (e.key === 'ArrowRight') { navigate(1);  e.preventDefault(); }
+  if (e.key === 'ArrowUp')    { navigate(-10); e.preventDefault(); }
+  if (e.key === 'ArrowDown')  { navigate(10);  e.preventDefault(); }
+  // Jump to character by typing it
+  if (e.key.length === 1) {
+    const code = e.key.charCodeAt(0);
+    if (code >= 32 && code <= 126) selectChar(code - 32);
+  }
+});
+
+// ═══════════════════════════════════════════════
+// ZOOM PREVIEWS
+// ═══════════════════════════════════════════════
+function renderZooms() {
+  renderZoom('pv1',  1);
+  renderZoom('pv3',  3);
+  renderZoom('pv6',  6);
+  renderZoom('pv10', 10);
+  renderPreview();
+}
+
+function renderZoom(id, scale) {
+  const canvas = document.getElementById(id);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const d = fontData[currentChar];
+  ctx.fillStyle = '#3dff90';
+  for (let col = 0; col < 6; col++)
+    for (let row = 0; row < 8; row++)
+      if (d[col] & (1 << row))
+        ctx.fillRect(col * scale, row * scale, scale, scale);
+}
+
+// ═══════════════════════════════════════════════
+// TEXT PREVIEW
+// ═══════════════════════════════════════════════
+function renderPreview() {
+  const text  = document.getElementById('previewText').value;
+  const scale = parseInt(document.getElementById('pvScale').value) || 3;
+  const onClr = document.getElementById('pvOn').value;
+  const bgClr = document.getElementById('pvBg').value;
+
+  const cw = 6 * scale;
+  const ch = 8 * scale;
+  const pad = scale * 2;
+  const canvas = document.getElementById('previewCanvas');
+  canvas.width  = Math.max(1, text.length * cw + pad * 2);
+  canvas.height = ch + pad * 2;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = bgClr;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = onClr;
+
+  for (let ci = 0; ci < text.length; ci++) {
+    const ascii = text.charCodeAt(ci);
+    if (ascii < 32 || ascii > 126) continue;
+    const d = fontData[ascii - 32];
+    for (let col = 0; col < 6; col++)
+      for (let row = 0; row < 8; row++)
+        if (d[col] & (1 << row))
+          ctx.fillRect(pad + ci * cw + col * scale, pad + row * scale, scale, scale);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// HEX DISPLAY
+// ═══════════════════════════════════════════════
+function updateHex() {
+  const d = fontData[currentChar];
+  const hex = d.map(b => '0x' + b.toString(16).toUpperCase().padStart(2,'0')).join(', ');
+  const ascii = currentChar + 32;
+  const ch = ascii >= 33 && ascii <= 126 ? String.fromCharCode(ascii) : 'space';
+  document.getElementById('hexOut').textContent = `{${hex}}\n// ASCII ${ascii}  '${ch}'`;
+}
+
+// ═══════════════════════════════════════════════
+// EDIT TOOLS
+// ═══════════════════════════════════════════════
+function clearChar() {
+  fontData[currentChar] = [0,0,0,0,0,0];
+  refreshEditor();
+}
+
+function fillChar() {
+  fontData[currentChar] = [0x7F,0x7F,0x7F,0x7F,0x7F,0x7F];
+  refreshEditor();
+}
+
+function invertChar() {
+  const d = fontData[currentChar];
+  for (let col = 0; col < 6; col++) d[col] = (~d[col]) & 0x7F;
+  refreshEditor();
+}
+
+function shiftChar(dx, dy) {
+  const old = fontData[currentChar].map(b => b);
+  const nw  = [0,0,0,0,0,0];
+  for (let col = 0; col < 6; col++) {
+    const sc = col - dx;
+    if (sc < 0 || sc >= 6) continue;
+    for (let row = 0; row < 8; row++) {
+      const sr = row - dy;
+      if (sr < 0 || sr >= 8) continue;
+      if (old[sc] & (1 << sr)) nw[col] |= (1 << row);
+    }
+  }
+  fontData[currentChar] = nw;
+  refreshEditor();
+}
+
+function mirrorH() {
+  const d = fontData[currentChar];
+  fontData[currentChar] = [d[4], d[3], d[2], d[1], d[0], d[5]];
+  refreshEditor();
+}
+
+function mirrorV() {
+  const d = fontData[currentChar];
+  for (let col = 0; col < 6; col++) {
+    let b = d[col], nb = 0;
+    for (let row = 0; row < 7; row++)
+      if (b & (1 << row)) nb |= (1 << (6 - row));
+    d[col] = nb;
+  }
+  refreshEditor();
+}
+
+function resetFont() {
+  if (!confirm('Reset all 95 characters to the built-in font?')) return;
+  fontData = FONT_DEFAULT.map(r => [...r]);
+  buildCharGrid();
+  refreshEditor();
+  renderPreview();
+}
+
+// ═══════════════════════════════════════════════
+// IMPORT
+// ═══════════════════════════════════════════════
+function showModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function doImport() {
+  const src    = document.getElementById('importText').value;
+  const parsed = parseCFont(src);
+  if (!parsed) {
+    alert('Could not parse font data.\nMake sure the text contains lines like {0x3E, 0x41, ...}');
+    return;
+  }
+  fontData = parsed;
+  buildCharGrid();
+  refreshEditor();
+  renderPreview();
+  closeModal('importModal');
+  document.getElementById('importText').value = '';
+}
+
+function parseCFont(src) {
+  // Find all {...} groups containing comma-separated hex/decimal numbers
+  const groups = [...src.matchAll(/\{([^}]+)\}/g)];
+  if (!groups.length) return null;
+
+  const result = [];
+  for (const g of groups) {
+    const vals = [...g[1].matchAll(/0x[0-9A-Fa-f]{1,2}|\b\d{1,3}\b/g)]
+      .map(m => {
+        const s = m[0];
+        return s.startsWith('0x') || s.startsWith('0X') ? parseInt(s, 16) : parseInt(s, 10);
+      });
+    if (!vals.length) continue;
+    const row = vals.slice(0, 6);
+    while (row.length < 6) row.push(0);
+    result.push(row);
+  }
+
+  if (!result.length) return null;
+  // Pad if partial import
+  while (result.length < 95) result.push([0,0,0,0,0,0]);
+  return result.slice(0, 95);
+}
+
+// ═══════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════
+function showExport() {
+  const lines = ['static const uint8_t font6x8[95][6] PROGMEM = {'];
+  for (let i = 0; i < 95; i++) {
+    const ascii = i + 32;
+    const d     = fontData[i];
+    const hex   = d.map(b => '0x' + b.toString(16).toUpperCase().padStart(2,'0')).join(', ');
+    const label = ascii === 32  ? 'space' :
+                  ascii === 92  ? 'backslash' :
+                  ascii >= 33 && ascii <= 126 ? String.fromCharCode(ascii) : ascii;
+    const comma = i < 94 ? ',' : '';
+    lines.push(`  {${hex}}${comma} // ${ascii} ${label}`);
+  }
+  lines.push('};');
+  document.getElementById('exportText').value = lines.join('\n');
+  showModal('exportModal');
+}
+
+function copyExport() {
+  const ta  = document.getElementById('exportText');
+  const btn = document.getElementById('copyBtn');
+  navigator.clipboard.writeText(ta.value).then(() => {
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
+  }).catch(() => {
+    ta.select();
+    document.execCommand('copy');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// GOOGLE FONTS CONVERSION
+// ═══════════════════════════════════════════════
+const loadedFontNames = new Set();
+
+function gfPickPop() {
+  const v = document.getElementById('gfPop').value;
+  if (v) document.getElementById('gfName').value = v;
+}
+
+async function loadGoogleFont() {
+  const fontName = (document.getElementById('gfName').value.trim() ||
+                    document.getElementById('gfPop').value).trim();
+  if (!fontName) { alert('Enter or select a font name.'); return; }
+
+  const statusEl = document.getElementById('gfStatus');
+  const thresh   = parseInt(document.getElementById('gfThresh').value) / 100;
+  const scope    = document.getElementById('gfScope').value;
+
+  statusEl.className = 'status info';
+  statusEl.textContent = `Loading "${fontName}" from Google Fonts…`;
+
+  try {
+    await fetchGoogleFont(fontName, statusEl);
+
+    statusEl.textContent = 'Converting characters…';
+
+    if (scope === 'cur') {
+      const ascii = currentChar + 32;
+      if (ascii >= 32 && ascii <= 126) {
+        fontData[currentChar] = convertChar(String.fromCharCode(ascii), fontName, thresh);
+        refreshEditor();
+      }
+    } else {
+      for (let i = 0; i < 95; i++) {
+        const ascii = i + 32;
+        fontData[i] = convertChar(String.fromCharCode(ascii), fontName, thresh);
+      }
+      buildCharGrid();
+      refreshEditor();
+      renderPreview();
+    }
+
+    statusEl.className = 'status ok';
+    statusEl.textContent = `✓ "${fontName}" converted successfully!`;
+  } catch (e) {
+    statusEl.className = 'status err';
+    statusEl.textContent = `Error: ${e.message}`;
+    console.error(e);
+  }
+}
+
+async function fetchGoogleFont(fontName, statusEl) {
+  if (loadedFontNames.has(fontName)) return;
+
+  // Build URL — spaces become +, no further encoding needed for font names
+  const url = 'https://fonts.googleapis.com/css2?family=' +
+              fontName.replace(/ /g, '+') + '&display=swap';
+
+  // Try fetch() first (better error handling), fall back to <link> for file:// origins
+  let cssLoaded = false;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Font not found (HTTP ${resp.status})`);
+    const css = await resp.text();
+    if (!css || !css.includes('@font-face'))
+      throw new Error('No font data in response — check the font name');
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+    cssLoaded = true;
+  } catch (fetchErr) {
+    // fetch() fails from file:// protocol — fall back to <link> injection
+    statusEl && (statusEl.textContent = 'Loading font (fallback)…');
+    await new Promise((resolve, reject) => {
+      const link = document.createElement('link');
+      link.rel  = 'stylesheet';
+      link.href = url;
+      link.onload  = () => { cssLoaded = true; resolve(); };
+      link.onerror = () => reject(new Error(
+        'Could not load Google Fonts. Check font name and internet connection.'));
+      document.head.appendChild(link);
+      // Safety: some browsers never fire onload/onerror for <link>, so resolve after timeout
+      setTimeout(() => resolve(), 6000);
+    });
+  }
+
+  // Wait for the actual font face to download
+  statusEl && (statusEl.textContent = 'Downloading font files…');
+  try { await document.fonts.load(`20px '${fontName}'`); } catch(e) { /* ignore */ }
+  await new Promise(r => setTimeout(r, 500));
+
+  // Verify the font is actually available
+  if (!document.fonts.check(`16px '${fontName}'`)) {
+    throw new Error(`Font "${fontName}" not found. Check the exact name at fonts.google.com`);
+  }
+
+  loadedFontNames.add(fontName);
+}
+
+function convertChar(char, fontName, threshold) {
+  if (char === ' ') return [0,0,0,0,0,0];
+
+  const W = 200, H = 200, SZ = 80;
+  const cv  = document.createElement('canvas');
+  cv.width  = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+
+  // White background → black glyph
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#000';
+  ctx.font = `${SZ}px '${fontName}', monospace`;
+  ctx.textBaseline = 'top';
+  ctx.fillText(char, 10, 10);
+
+  const img  = ctx.getImageData(0, 0, W, H);
+  const pix  = img.data;
+
+  // Find bounding box of dark pixels
+  let x0 = W, x1 = 0, y0 = H, y1 = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i  = (y * W + x) * 4;
+      const dark = 1 - (pix[i] + pix[i+1] + pix[i+2]) / (255 * 3);
+      if (dark > 0.04) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+
+  if (x0 > x1 || y0 > y1) return [0,0,0,0,0,0]; // invisible char
+
+  const gw = x1 - x0 + 1;
+  const gh = y1 - y0 + 1;
+
+  // Map 5 output columns × 7 output rows to bounding box regions
+  const bytes = [0,0,0,0,0,0];
+  for (let outCol = 0; outCol < 5; outCol++) {
+    for (let outRow = 0; outRow < 7; outRow++) {
+      const sx0 = x0 + (outCol / 5) * gw;
+      const sx1 = x0 + ((outCol + 1) / 5) * gw;
+      const sy0 = y0 + (outRow / 7) * gh;
+      const sy1 = y0 + ((outRow + 1) / 7) * gh;
+
+      let total = 0, count = 0;
+      for (let sy = Math.floor(sy0); sy < Math.ceil(sy1); sy++) {
+        for (let sx = Math.floor(sx0); sx < Math.ceil(sx1); sx++) {
+          if (sx < 0 || sx >= W || sy < 0 || sy >= H) continue;
+          const i = (sy * W + sx) * 4;
+          total += 1 - (pix[i] + pix[i+1] + pix[i+2]) / (255 * 3);
+          count++;
+        }
+      }
+
+      if (count > 0 && total / count >= threshold)
+        bytes[outCol] |= (1 << outRow);
+    }
+  }
+
+  return bytes;
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+function init() {
+  buildPixelGrid();
+  buildCharGrid();
+  selectChar(1); // '!'
+  renderPreview();
+}
+
+init();
+</script>
+</body>
+</html>
