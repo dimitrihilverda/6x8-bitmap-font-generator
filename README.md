@@ -1,5 +1,9 @@
 # 6×8 Bitmap Font Generator
 
+<p align="center">
+  <img src="docs/banner.svg" alt="6x8 Bitmap Font Generator" width="640">
+</p>
+
 A single-file browser tool for drawing and generating the `font6x8[95][6]` glyph table used by
 the [Gotek Touchscreen interface](https://github.com/dimitrihilverda/Gotek-Touchscreen-interface)
 firmware — and by any other Arduino/ESP32 project that renders text as column-encoded bitmaps.
