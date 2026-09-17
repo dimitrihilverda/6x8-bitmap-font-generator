@@ -164,8 +164,8 @@ code{font-family:monospace;font-size:11.5px;color:#88aaff;background:var(--sunk)
       <h2>Logo <span class="stat">1bpp · MSB-first</span></h2>
       <canvas id="grid" width="384" height="144"></canvas>
       <div class="row" style="margin-top:10px">
-        <div><label for="lw">Width (8–128)</label><input type="number" id="lw" min="8" max="128" step="8" value="96"></div>
-        <div><label for="lh">Height (1–48)</label><input type="number" id="lh" min="1" max="48" value="24"></div>
+        <div><label for="lw">Width (8–480)</label><input type="number" id="lw" min="8" max="480" step="8" value="192"></div>
+        <div><label for="lh">Height (1–320)</label><input type="number" id="lh" min="1" max="320" value="48"></div>
       </div>
       <div class="tools">
         <button id="useit" class="primary small">Use this logo in this pattern</button>
@@ -247,7 +247,7 @@ let FONT = DEFAULT_FONT, customFont = false;
 
 const GW = 480, GH = 320, NUM_STARS = 60;
 const RESERVED = ['OFF','NONE','CUSTOM','OMEGA','OMEGAWARE','DENISE','WRANGLER','RETRONAUT'];
-const LIM = { patterns:4, logoW:128, logoH:48, scroll:512, file:32768 };
+const LIM = { patterns:4, logoW:480, logoH:320, scroll:512, file:262144 };
 
 /* ---- colour: the panel is RGB565. Quantise exactly like CRK_RGB. ---- */
 function q565(r,g,b){ return [r & 0xF8, g & 0xFC, b & 0xF8]; }
@@ -382,7 +382,7 @@ const FX = {COPPER:fxCopper,STARFIELD:fxStarfield,RASTER:fxRaster,PLASMA:fxPlasm
 /* ---- model ---- */
 let pats=[{fx:'COPPER',time:4000,title:'OMEGAWARE',sub:'* MEZ & DIMMY *',colHex:'#ffe000',scroll:'ON',logo:-1}];
 let cur=0;
-let logo={w:96,h:24,bits:new Uint8Array(12*24)};
+let logo={w:192,h:48,bits:new Uint8Array(24*48)};
 const $ = id => document.getElementById(id);
 
 function logoStride(){ return (logo.w+7)>>3; }
