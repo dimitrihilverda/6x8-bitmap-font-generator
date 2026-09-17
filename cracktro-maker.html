@@ -131,6 +131,8 @@ code{font-family:monospace;font-size:11.5px;color:#88aaff;background:var(--sunk)
         <div><label for="col">Colour</label><input type="color" id="col" value="#ffe000" style="height:34px;padding:2px"></div>
         <div><label for="scroll">Scroller</label>
           <select id="scroll"><option value="ON">On</option><option value="OFF">Off</option></select></div>
+        <div><label for="scol">Scroller colour</label>
+          <input type="color" id="scol" value="#000000" style="height:34px;padding:2px" title="Black = leave the effect's own scroller colour"></div>
         <div><label for="logo">Logo</label>
           <select id="logo"><option value="-1">None</option><option value="0">Logo 0</option></select></div>
       </div>
@@ -169,6 +171,7 @@ code{font-family:monospace;font-size:11.5px;color:#88aaff;background:var(--sunk)
       </div>
       <div class="tools">
         <button id="useit" class="primary small">Use this logo in this pattern</button>
+        <button id="undo" class="small" disabled>Undo</button>
       </div>
       <div class="row">
         <div><label for="mode">Logo kind</label>
@@ -222,7 +225,8 @@ code{font-family:monospace;font-size:11.5px;color:#88aaff;background:var(--sunk)
   <h2>The file <span class="stat" id="size"></span></h2>
   <textarea id="out" class="out" readonly spellcheck="false"></textarea>
   <div class="bar">
-    <button id="copy" class="primary">Copy for Discord</button>
+    <button id="save" class="primary">Save .gti</button>
+    <button id="copy">Copy for Discord</button>
     <span class="stat" id="copymsg"></span>
   </div>
   <div class="note">
@@ -380,7 +384,7 @@ function fxLogo(t,p){
 const FX = {COPPER:fxCopper,STARFIELD:fxStarfield,RASTER:fxRaster,PLASMA:fxPlasma,BOING:fxBoing,SYNTH:fxSynth,LOGO:fxLogo};
 
 /* ---- model ---- */
-let pats=[{fx:'COPPER',time:4000,title:'OMEGAWARE',sub:'* MEZ & DIMMY *',colHex:'#ffe000',scroll:'ON',logo:-1}];
+let pats=[{fx:'COPPER',time:4000,title:'OMEGAWARE',sub:'* MEZ & DIMMY *',colHex:'#ffe000',scolHex:'#000000',scroll:'ON',logo:-1}];
 let cur=0;
 let logo={w:192,h:48,bits:new Uint8Array(24*48)};
 const $ = id => document.getElementById(id);
@@ -412,6 +416,7 @@ function build(){
     if(p.title) L.push('TITLE='+p.title);
     if(p.sub)   L.push('SUB='+p.sub);
     L.push('COL='+p.colHex.slice(1).toUpperCase());
+    if(p.scolHex && p.scolHex!=='#000000') L.push('SCROLLCOL='+p.scolHex.slice(1).toUpperCase());
     L.push('SCROLL='+p.scroll);
     if(p.logo>=0){ L.push((isColour()&&colourPng?'IMAGE=':'LOGO=')+p.logo); usesLogo=true; }
   });
@@ -447,7 +452,7 @@ function parseGti(src){
   for(i++;i<lines.length;i++){
     const ln=lines[i]; if(!ln||ln[0]===';') continue;
     if(ln[0]==='['){
-      if(/^\[PATTERN/i.test(ln)){ cu={fx:'COPPER',time:4000,title:'',sub:'',colHex:'#ffe000',scroll:'OFF',logo:-1}; np.push(cu); sec='P'; }
+      if(/^\[PATTERN/i.test(ln)){ cu={fx:'COPPER',time:4000,title:'',sub:'',colHex:'#ffe000',scolHex:'#000000',scroll:'OFF',logo:-1}; np.push(cu); sec='P'; }
       else if(/^\[SCROLL/i.test(ln)){ sec='S'; cu=null; }
       else if(/^\[LOGO/i.test(ln)){ sec='L'; cu=null; lg={w:96,h:24}; rows=[]; }
       else if(/^\[FONT/i.test(ln)){ sec='F'; cu=null; frows=[]; }
@@ -468,6 +473,7 @@ function parseGti(src){
     else if(k==='SCROLL') cu.scroll=/^(ON|1|TRUE)$/i.test(v)?'ON':'OFF';
     else if(k==='LOGO') cu.logo=parseInt(v,10);
     else if(k==='COL' && /^[0-9A-Fa-f]{6}$/.test(v)) cu.colHex='#'+v.toLowerCase();
+    else if(k==='SCROLLCOL' && /^[0-9A-Fa-f]{6}$/.test(v)) cu.scolHex='#'+v.toLowerCase();
   }
   if(!np.length) throw new Error('no [PATTERN] blocks');
   if(np.length>LIM.patterns) throw new Error('more than '+LIM.patterns+' patterns');
@@ -490,9 +496,18 @@ function parseGti(src){
 
 /* ---- font import: accept JSON or a C block ---- */
 function parseFont(src){
-  const nums=src.match(/0x[0-9a-fA-F]{1,2}|\b\d{1,3}\b/g);
-  if(!nums) throw new Error('no byte values found');
-  const vals=nums.map(n=>n.indexOf('0x')===0?parseInt(n,16):parseInt(n,10)).filter(n=>n>=0&&n<=255);
+  // Strip comments first. A pasted font6x8 block carries "// 32 space", "// 65 A"
+  // and so on, and reading those numbers as bytes shifts every glyph along -
+  // which comes out as unreadable text rather than an error.
+  const clean = src.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,'');
+  let vals;
+  const hex = clean.match(/0x[0-9a-fA-F]{1,2}/g);
+  if(hex && hex.length>=95*6) vals = hex.map(h=>parseInt(h,16));
+  else {
+    const dec = clean.match(/\b\d{1,3}\b/g);
+    if(!dec) throw new Error('no byte values found');
+    vals = dec.map(d=>parseInt(d,10)).filter(n=>n>=0&&n<=255);
+  }
   if(vals.length<95*6) throw new Error('found '+vals.length+' bytes, need '+(95*6));
   const g=[]; for(let i=0;i<95;i++) g.push(vals.slice(i*6,i*6+6));
   return g;
@@ -511,12 +526,12 @@ function tabs(){
 function form(){
   const p=pats[cur]; if(!p) return;
   $('fx').value=p.fx; $('time').value=p.time; $('title').value=p.title;
-  $('sub').value=p.sub; $('col').value=p.colHex; $('scroll').value=p.scroll; $('logo').value=String(p.logo);
+  $('sub').value=p.sub; $('col').value=p.colHex; $('scol').value=p.scolHex||'#000000'; $('scroll').value=p.scroll; $('logo').value=String(p.logo);
 }
 function readForm(){
   const p=pats[cur]; if(!p) return;
   p.fx=$('fx').value; p.time=Math.max(500,parseInt($('time').value,10)||4000);
-  p.title=$('title').value; p.sub=$('sub').value; p.colHex=$('col').value;
+  p.title=$('title').value; p.sub=$('sub').value; p.colHex=$('col').value; p.scolHex=$('scol').value;
   p.scroll=$('scroll').value; p.logo=parseInt($('logo').value,10);
   tabs(); render();
 }
@@ -556,6 +571,22 @@ function drawGrid(){
   if(cellW>4){ for(let c=0;c<=logo.w;c+=8){ gx.beginPath(); gx.moveTo(ox+c*cellW,oy); gx.lineTo(ox+c*cellW,oy+h); gx.stroke(); } }
   gc._geom={cellW,cellH,ox,oy};
 }
+// Undo stack for the pixel editor: one snapshot per stroke or command, so a
+// slip of the mouse over a finished wordmark is not the end of it.
+const undoStack=[];
+function pushUndo(){
+  undoStack.push({w:logo.w,h:logo.h,bits:new Uint8Array(logo.bits)});
+  if(undoStack.length>40) undoStack.shift();
+  const b=$('undo'); if(b) b.disabled=false;
+}
+function popUndo(){
+  const st=undoStack.pop(); if(!st) return;
+  logo={w:st.w,h:st.h,bits:st.bits};
+  $('lw').value=logo.w; $('lh').value=logo.h;
+  const b=$('undo'); if(b) b.disabled=undoStack.length===0;
+  drawGrid(); render();
+}
+
 let painting=false, paintVal=true;
 function gridHit(e){
   const r=gc.getBoundingClientRect(), g=gc._geom; if(!g) return null;
@@ -563,7 +594,7 @@ function gridHit(e){
   return [Math.floor((sx-g.ox)/g.cellW), Math.floor((sy-g.oy)/g.cellH)];
 }
 gc.addEventListener('pointerdown',e=>{ const h=gridHit(e); if(!h) return;
-  paintVal=!getPix(h[0],h[1]); painting=true; setPix(h[0],h[1],paintVal); gc.setPointerCapture(e.pointerId); drawGrid(); render(); });
+  pushUndo(); paintVal=!getPix(h[0],h[1]); painting=true; setPix(h[0],h[1],paintVal); gc.setPointerCapture(e.pointerId); drawGrid(); render(); });
 gc.addEventListener('pointermove',e=>{ if(!painting) return; const h=gridHit(e); if(!h) return; setPix(h[0],h[1],paintVal); drawGrid(); render(); });
 gc.addEventListener('pointerup',()=>{painting=false;});
 gc.addEventListener('pointercancel',()=>{painting=false;});
@@ -584,7 +615,8 @@ function frame(now){
     (FX[p.fx]||fxCopper)(tAcc,P);
     if(p.scroll==='ON'){
       const s=$('scrolltext').value||' ';
-      scroller(tAcc,'   '+s+'   ',P.col,11,false);
+      const sc=(p.scolHex&&p.scolHex!=='#000000')?(()=>{const q=hex2rgb(p.scolHex);return css(q[0],q[1],q[2]);})():P.col;
+      scroller(tAcc,'   '+s+'   ',sc,11,false);
     }
   }
   Array.from($('timeline').children).forEach((d,i)=>d.classList.toggle('on',i===idx));
@@ -593,7 +625,7 @@ function frame(now){
 }
 
 /* ---- wiring ---- */
-['fx','time','title','sub','col','scroll','logo'].forEach(id=>{
+['fx','time','title','sub','col','scol','scroll','logo'].forEach(id=>{
   $(id).addEventListener('input',readForm); $(id).addEventListener('change',readForm); });
 $('scrolltext').addEventListener('input',render);
 ['name','author','fname'].forEach(id=>$(id).addEventListener('input',render));
@@ -628,6 +660,7 @@ function makeColourPng(){
 let colourW=0, colourH=0;
 function applyImage(){
   if(!srcImg) return;
+  if(!isColour()) pushUndo();
   if(isColour()){ makeColourPng(); drawGrid(); render(); return; }
   const W=logo.w, H=logo.h;
   const cvv=document.createElement('canvas'); cvv.width=W; cvv.height=H;
@@ -662,6 +695,11 @@ $('mode').addEventListener('change',()=>{
   if(srcImg) applyImage(); else { drawGrid(); render(); }
 });
 $('maxw').addEventListener('change',()=>{ if(isColour()) applyImage(); });
+$('undo').onclick=popUndo;
+window.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey) && e.key==='z' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){
+    e.preventDefault(); popUndo(); }
+});
 $('pick').onclick=()=>$('file').click();
 $('file').addEventListener('change',e=>{ takeFile(e.target.files[0]); e.target.value=''; });
 $('thr').addEventListener('input',()=>{ $('thrval').textContent=$('thr').value; applyImage(); });
@@ -670,9 +708,9 @@ window.addEventListener('dragover',e=>e.preventDefault());
 window.addEventListener('drop',e=>{ e.preventDefault();
   const f=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) takeFile(f); });
 
-$('clear').onclick=()=>{ logo.bits.fill(0); srcImg=null; colourPng=''; $('thrrow').hidden=true; drawGrid(); render(); };
-$('invert').onclick=()=>{ for(let r=0;r<logo.h;r++) for(let c=0;c<logo.w;c++) setPix(c,r,!getPix(c,r)); drawGrid(); render(); };
-$('fromtext').onclick=()=>{
+$('clear').onclick=()=>{ pushUndo(); logo.bits.fill(0); srcImg=null; colourPng=''; $('thrrow').hidden=true; drawGrid(); render(); };
+$('invert').onclick=()=>{ pushUndo(); for(let r=0;r<logo.h;r++) for(let c=0;c<logo.w;c++) setPix(c,r,!getPix(c,r)); drawGrid(); render(); };
+$('fromtext').onclick=()=>{ pushUndo();
   const s=(pats[cur].title||'GTI').toUpperCase();
   logo.bits.fill(0);
   const sz=Math.max(1,Math.min(4,Math.floor(logo.w/(s.length*6))||1));
@@ -684,7 +722,7 @@ $('fromtext').onclick=()=>{
   drawGrid(); render();
 };
 $('addp').onclick=()=>{ if(pats.length>=LIM.patterns) return;
-  pats.push({fx:'SYNTH',time:4000,title:'',sub:'',colHex:'#ffe000',scroll:'ON',logo:-1});
+  pats.push({fx:'SYNTH',time:4000,title:'',sub:'',colHex:'#ffe000',scolHex:'#000000',scroll:'ON',logo:-1});
   cur=pats.length-1; tabs(); form(); render(); };
 $('delp').onclick=()=>{ if(pats.length<=1) return; pats.splice(cur,1); cur=Math.max(0,cur-1); tabs(); form(); render(); };
 $('play').onclick=e=>{ playing=!playing; e.target.textContent=playing?'Pause':'Play'; e.target.setAttribute('aria-pressed',String(playing)); };
@@ -692,6 +730,16 @@ $('copy').onclick=async()=>{
   const m=$('copymsg');
   try{ await navigator.clipboard.writeText($('out').value); m.textContent='Copied.'; m.className='stat okmsg'; }
   catch(_){ $('out').select(); m.textContent='Press Ctrl/Cmd+C to copy the selection.'; m.className='stat'; }
+  setTimeout(()=>{m.textContent='';},2600);
+};
+$('save').onclick=()=>{
+  const name=($('fname').value.trim()||'cracktro')+'.gti';
+  const blob=new Blob([$('out').value],{type:'text/plain'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1000);
+  const m=$('copymsg'); m.textContent='Saved '+name; m.className='stat okmsg';
   setTimeout(()=>{m.textContent='';},2600);
 };
 $('parse').onclick=()=>{
