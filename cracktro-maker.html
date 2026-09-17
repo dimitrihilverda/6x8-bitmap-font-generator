@@ -11,6 +11,7 @@
   --warn:#ffb648; --on-accent:#000;
 }
 *{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}   /* beats .row's display:grid */
 body{background:var(--bg);color:var(--text);
   font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:var(--accent)}
@@ -167,11 +168,22 @@ code{font-family:monospace;font-size:11.5px;color:#88aaff;background:var(--sunk)
         <div><label for="lh">Height (1–48)</label><input type="number" id="lh" min="1" max="48" value="24"></div>
       </div>
       <div class="tools">
+        <button id="useit" class="primary small">Use this logo in this pattern</button>
+      </div>
+      <div class="tools">
+        <button id="pick" class="small">Import image&hellip;</button>
+        <input type="file" id="file" accept="image/*" hidden>
         <button id="clear" class="small">Clear</button>
         <button id="invert" class="small">Invert</button>
         <button id="fromtext" class="small">Draw title as pixels</button>
       </div>
-      <p class="hint">Click or drag to draw. This is the same bitmap layout as the firmware's built-in wordmarks, so the panel blits it with code that already exists. Pick <b>Logo</b> as the effect and set Logo 0 to show it.</p>
+      <div class="row" id="thrrow" hidden>
+        <div><label for="thr">Threshold <span class="stat" id="thrval">128</span></label>
+          <input type="range" id="thr" min="1" max="254" value="128" style="width:100%"></div>
+        <div><label for="thrinv">Dark shapes on light</label>
+          <select id="thrinv"><option value="0">No</option><option value="1">Yes</option></select></div>
+      </div>
+      <p class="hint">Click or drag to draw, or drop an image anywhere on the page. This is the same bitmap layout as the firmware's built-in wordmarks, so the panel blits it with code that already exists. A logo only appears when the pattern's effect is <b>Logo</b> and its Logo box points at it — the button above sets both.</p>
     </section>
 
     <section>
@@ -559,9 +571,53 @@ function frame(now){
   $(id).addEventListener('input',readForm); $(id).addEventListener('change',readForm); });
 $('scrolltext').addEventListener('input',render);
 ['name','author','fname'].forEach(id=>$(id).addEventListener('input',render));
-$('lw').addEventListener('change',()=>{ resizeLogo(parseInt($('lw').value,10),logo.h); $('lw').value=logo.w; drawGrid(); render(); });
-$('lh').addEventListener('change',()=>{ resizeLogo(logo.w,parseInt($('lh').value,10)); $('lh').value=logo.h; drawGrid(); render(); });
-$('clear').onclick=()=>{ logo.bits.fill(0); drawGrid(); render(); };
+$('lw').addEventListener('change',()=>{ resizeLogo(parseInt($('lw').value,10),logo.h); $('lw').value=logo.w; if(srcImg) applyImage(); else { drawGrid(); render(); } });
+$('lh').addEventListener('change',()=>{ resizeLogo(logo.w,parseInt($('lh').value,10)); $('lh').value=logo.h; if(srcImg) applyImage(); else { drawGrid(); render(); } });
+$('useit').onclick=()=>{
+  const p=pats[cur]; if(!p) return;
+  p.fx='LOGO'; p.logo=0; form(); tabs(); render();
+};
+
+/* Import an image: fit inside the logo box, then threshold to 1bpp. Same shape
+   as the AmiCrush candy studio importer - keep the source around so the
+   threshold slider can re-apply without picking the file again. */
+let srcImg=null;
+function applyImage(){
+  if(!srcImg) return;
+  const W=logo.w, H=logo.h;
+  const cvv=document.createElement('canvas'); cvv.width=W; cvv.height=H;
+  const g=cvv.getContext('2d');
+  const sc=Math.min(W/srcImg.width, H/srcImg.height);
+  const w=Math.max(1,Math.round(srcImg.width*sc)), h=Math.max(1,Math.round(srcImg.height*sc));
+  g.imageSmoothingEnabled=(srcImg.width>W*2||srcImg.height>H*2);
+  g.clearRect(0,0,W,H);
+  g.drawImage(srcImg,((W-w)/2)|0,((H-h)/2)|0,w,h);
+  const d=g.getImageData(0,0,W,H).data;
+  const thr=parseInt($('thr').value,10), inv=$('thrinv').value==='1';
+  logo.bits.fill(0);
+  for(let r=0;r<H;r++) for(let c=0;c<W;c++){
+    const i=(r*W+c)*4;
+    if(d[i+3]<128) continue;                                   // transparent stays off
+    const lum=0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2];
+    if(inv ? lum<thr : lum>=thr) setPix(c,r,true);
+  }
+  drawGrid(); render();
+}
+function takeFile(f){
+  if(!f || !/^image\//.test(f.type)) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ const im=new Image(); im.onload=()=>{ srcImg=im; $('thrrow').hidden=false; applyImage(); }; im.src=fr.result; };
+  fr.readAsDataURL(f);
+}
+$('pick').onclick=()=>$('file').click();
+$('file').addEventListener('change',e=>{ takeFile(e.target.files[0]); e.target.value=''; });
+$('thr').addEventListener('input',()=>{ $('thrval').textContent=$('thr').value; applyImage(); });
+$('thrinv').addEventListener('change',applyImage);
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>{ e.preventDefault();
+  const f=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) takeFile(f); });
+
+$('clear').onclick=()=>{ logo.bits.fill(0); srcImg=null; $('thrrow').hidden=true; drawGrid(); render(); };
 $('invert').onclick=()=>{ for(let r=0;r<logo.h;r++) for(let c=0;c<logo.w;c++) setPix(c,r,!getPix(c,r)); drawGrid(); render(); };
 $('fromtext').onclick=()=>{
   const s=(pats[cur].title||'GTI').toUpperCase();
