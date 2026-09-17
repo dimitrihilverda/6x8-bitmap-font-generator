@@ -180,8 +180,9 @@ code{font-family:monospace;font-size:11.5px;color:#88aaff;background:var(--sunk)
             <option value="MONO">1bpp wordmark — tiny, one colour, drawn by hand</option>
           </select></div>
         <div><label for="maxw">Max width on screen</label>
-          <input type="number" id="maxw" min="32" max="480" step="8" value="360"></div>
+          <input type="number" id="maxw" min="32" max="425" step="8" value="312"></div>
       </div>
+      <p class="hint" id="flatnote" style="color:var(--warn)"></p>
       <div class="tools">
         <button id="pick" class="small">Import image&hellip;</button>
         <input type="file" id="file" accept="image/*" hidden>
@@ -236,7 +237,7 @@ code{font-family:monospace;font-size:11.5px;color:#88aaff;background:var(--sunk)
     <p><b>Reserved names.</b> <code>OFF</code>, <code>NONE</code>, <code>CUSTOM</code>, <code>OMEGA</code>,
       <code>OMEGAWARE</code>, <code>DENISE</code>, <code>WRANGLER</code>, <code>RETRONAUT</code> and anything starting
       with a digit always select a built-in, so a file with one of those names can never be chosen by name.</p>
-    <p><b>Two kinds of logo.</b> <b>Full colour</b> puts the picture itself in the file as a PNG — the panel decodes it with the same code it uses for cover art, so any artwork works up to 480&times;320. <b>1bpp wordmark</b> is the old scene look: one colour, a few hundred bytes, drawn by hand.</p>
+    <p><b>Two kinds of logo.</b> <b>Full colour</b> puts the picture itself in the file as a PNG — the panel decodes it with the same code it uses for cover art, so any artwork works up to 480&times;320. <b>1bpp wordmark</b> is the old scene look: one colour, a few hundred bytes, drawn by hand. A colour logo keeps its transparency up to 319px wide; wider than that the panel's PNG decoder cannot take an alpha channel, so it is flattened onto black for you.</p>
   <p><b>Your own font travels with the file.</b> Load one in the Font panel and it is written into the <code>[FONT]</code> block — 95 glyphs, about 1.2&nbsp;KB — so anyone you send the cracktro to sees your lettering without installing anything. Leave it on the default and no block is written.</p>
   <p><b>About this preview.</b> It uses the firmware's real 6×8 font and quantises every colour to RGB565 exactly as
       the panel does, and the effects are ported from the same formulas — so text placement and colour are what you
@@ -647,17 +648,26 @@ function isColour(){ return $('mode').value==='COLOUR'; }
 // hand-rolled pixel format - and PNG beats raw hex even for flat wordmarks.
 function makeColourPng(){
   if(!srcImg){ colourPng=''; return; }
-  const maxW=Math.max(32,Math.min(480,parseInt($('maxw').value,10)||360)), maxH=300;
+  const maxW=Math.max(32,Math.min(425,parseInt($('maxw').value,10)||312)), maxH=300;
   const sc=Math.min(maxW/srcImg.width, maxH/srcImg.height, 1);
   const w=Math.max(1,Math.round(srcImg.width*sc)), h=Math.max(1,Math.round(srcImg.height*sc));
   const cvv=document.createElement('canvas'); cvv.width=w; cvv.height=h;
   const g=cvv.getContext('2d');
+  // PNGdec keeps two decoded lines in one fixed array: RGBA fits to 319px wide,
+  // RGB to 425px. Past that the panel cannot decode it at all, so flatten the
+  // transparency onto black rather than hand over a file that will not open.
+  const flatten = (w >= 320);
+  if(flatten){ g.fillStyle='#000'; g.fillRect(0,0,w,h); }
   g.imageSmoothingEnabled=(srcImg.width>w*2);
   g.drawImage(srcImg,0,0,w,h);
   colourPng=cvv.toDataURL('image/png').split(',')[1]||'';
-  colourW=w; colourH=h;
+  colourW=w; colourH=h; colourFlat=flatten;
+  const n=$('flatnote');
+  if(n) n.textContent = flatten
+    ? 'Wider than 319px, so transparency is flattened onto black. Keep it under 320px wide to let the effect show through.'
+    : '';
 }
-let colourW=0, colourH=0;
+let colourW=0, colourH=0, colourFlat=false;
 function applyImage(){
   if(!srcImg) return;
   if(!isColour()) pushUndo();
