@@ -211,7 +211,8 @@ code{font-family:monospace;font-size:11.5px;color:#88aaff;background:var(--sunk)
     <p><b>Reserved names.</b> <code>OFF</code>, <code>NONE</code>, <code>CUSTOM</code>, <code>OMEGA</code>,
       <code>OMEGAWARE</code>, <code>DENISE</code>, <code>WRANGLER</code>, <code>RETRONAUT</code> and anything starting
       with a digit always select a built-in, so a file with one of those names can never be chosen by name.</p>
-    <p><b>About this preview.</b> It uses the firmware's real 6×8 font and quantises every colour to RGB565 exactly as
+    <p><b>Your own font travels with the file.</b> Load one in the Font panel and it is written into the <code>[FONT]</code> block — 95 glyphs, about 1.2&nbsp;KB — so anyone you send the cracktro to sees your lettering without installing anything. Leave it on the default and no block is written.</p>
+  <p><b>About this preview.</b> It uses the firmware's real 6×8 font and quantises every colour to RGB565 exactly as
       the panel does, and the effects are ported from the same formulas — so text placement and colour are what you
       will get. It is still a second implementation, so treat the glass as the final word.</p>
   </div>
@@ -390,6 +391,13 @@ function build(){
   });
   const st=$('scrolltext').value.trim();
   if(st){ L.push(''); L.push('[SCROLL]'); L.push('TEXT='+st); }
+  if(customFont){
+    L.push(''); L.push('[FONT]');
+    for(let i=0;i<95;i++){
+      const g=FONT[i]||[0,0,0,0,0,0];
+      let row=''; for(let c=0;c<6;c++) row += ((g[c]||0)&0xFF).toString(16).toUpperCase().padStart(2,'0');
+      L.push(row); }
+  }
   if(usesLogo && logo.bits.some(b=>b)){
     L.push(''); L.push('[LOGO 0]');
     L.push('W='+logo.w+' H='+logo.h);
@@ -406,17 +414,19 @@ function parseGti(src){
   const lines=src.split(/\r?\n/).map(s=>s.trim());
   let i=0; while(i<lines.length && (!lines[i] || lines[i][0]===';')) i++;
   if(i>=lines.length || lines[i].indexOf('GTICRACK 1')!==0) throw new Error('missing GTICRACK magic');
-  const np=[]; let cu=null, sec='', lg=null, rows=[], nm='', au='', st='';
+  const np=[]; let cu=null, sec='', lg=null, rows=[], frows=[], nm='', au='', st='';
   for(i++;i<lines.length;i++){
     const ln=lines[i]; if(!ln||ln[0]===';') continue;
     if(ln[0]==='['){
       if(/^\[PATTERN/i.test(ln)){ cu={fx:'COPPER',time:4000,title:'',sub:'',colHex:'#ffe000',scroll:'OFF',logo:-1}; np.push(cu); sec='P'; }
       else if(/^\[SCROLL/i.test(ln)){ sec='S'; cu=null; }
       else if(/^\[LOGO/i.test(ln)){ sec='L'; cu=null; lg={w:96,h:24}; rows=[]; }
+      else if(/^\[FONT/i.test(ln)){ sec='F'; cu=null; frows=[]; }
       else { sec=''; cu=null; }
       continue; }
     const eq=ln.indexOf('=');
-    if(eq<0){ if(sec==='L' && /^[0-9A-Fa-f]+$/.test(ln)) rows.push(ln); continue; }
+    if(eq<0){ if(sec==='L' && /^[0-9A-Fa-f]+$/.test(ln)) rows.push(ln);
+              else if(sec==='F' && /^[0-9A-Fa-f]{12}$/.test(ln)) frows.push(ln); continue; }
     const k=ln.slice(0,eq).trim().toUpperCase(), v=ln.slice(eq+1).trim();
     if(sec==='S'){ if(k==='TEXT') st=v; continue; }
     if(sec==='L'){ if(k==='W'){ lg.w=parseInt(v,10)||96; const m=/H\s*=\s*(\d+)/i.exec(v); if(m) lg.h=parseInt(m[1],10); }
@@ -438,6 +448,11 @@ function parseGti(src){
     rows.forEach((row,r)=>{ for(let b=0;b<s*2 && b*2+1<row.length+1 && b<s;b++){
       const byte=parseInt(row.substr(b*2,2),16); if(!isNaN(byte) && r*s+b<bits.length) bits[r*s+b]=byte; } });
     logo={w:lg.w,h:lg.h,bits};
+  }
+  if(frows.length){
+    if(frows.length<95) throw new Error('[FONT] has '+frows.length+' rows, needs 95');
+    FONT = frows.slice(0,95).map(r=>{ const g=[]; for(let c=0;c<6;c++) g.push(parseInt(r.substr(c*2,2),16)); return g; });
+    customFont = true; $('fontstat').textContent='custom font';
   }
   pats=np; cur=0;
   if(nm) $('name').value=nm; if(au) $('author').value=au;
